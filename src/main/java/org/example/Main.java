@@ -9,6 +9,5 @@ public class Main {
         botsApi.registerBot(new Mybot());
         System.out.println("Run");
         System.out.println();
-
     }
 }
