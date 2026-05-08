@@ -8,6 +8,7 @@ public class Main {
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
         botsApi.registerBot(new Mybot());
         System.out.println("Run");
+        System.out.println();
 
     }
 }
