@@ -94,7 +94,6 @@ public class Mybot extends TelegramLongPollingBot {
                                 + "📡 *Aloqa:* 5G + Wi-Fi 7 + Bluetooth 5.3\n"
                                 + "⚖️ *Og'irlik:* 170 g | *Qalinlik:* 7.8 mm"
                 },
-                // ── 🆕 iPhone 17 Pro Max ─────────────────────────────────
                 {
                         "iphone17promax",
                         "iPhone 17 Pro Max",
@@ -615,35 +614,39 @@ public class Mybot extends TelegramLongPollingBot {
         };
 
         // ════════════════════════════════════════════════════════════════
-        //  FILIALLAR — 8 ta
+        //  FILIALLAR — 8 ta: name | address | lat | lon
         // ════════════════════════════════════════════════════════════════
-        private static final String[] FILIALS = {
-                "🏢 Toshkent — Oybek ko'chasi 34",
-                "🏢 Toshkent — Chilonzor 9-kvartal",
-                "🏢 Toshkent — Yunusobod savdo markazi",
-                "🏢 Samarqand — Registon ko'chasi 12",
-                "🏢 Buxoro — Mustaqillik xiyoboni 5",
-                "🏢 Andijon — 2-mikrorayon",
-                "🏢 Namangan — Navoi ko'chasi 18",
-                "🏢 Farg'ona — Do'stlik ko'chasi 7"
+        private static final String[][] FILIALS = {
+                {"🏢 Toshkent — Oybek ko'chasi 34",        "Toshkent, Oybek ko'chasi 34",          "41.299589", "69.240074"},
+                {"🏢 Toshkent — Chilonzor 9-kvartal",      "Toshkent, Chilonzor 9-kvartal",        "41.278532", "69.198765"},
+                {"🏢 Toshkent — Yunusobod savdo markazi",  "Toshkent, Yunusobod",                  "41.336419", "69.284512"},
+                {"🏢 Samarqand — Registon ko'chasi 12",    "Samarqand, Registon ko'chasi 12",      "39.654255", "66.975472"},
+                {"🏢 Buxoro — Mustaqillik xiyoboni 5",     "Buxoro, Mustaqillik xiyoboni 5",       "39.774661", "64.428847"},
+                {"🏢 Andijon — 2-mikrorayon",              "Andijon, 2-mikrorayon",                "40.782683", "72.344465"},
+                {"🏢 Namangan — Navoi ko'chasi 18",        "Namangan, Navoi ko'chasi 18",          "40.999934", "71.672649"},
+                {"🏢 Farg'ona — Do'stlik ko'chasi 7",      "Farg'ona, Do'stlik ko'chasi 7",        "40.383317", "71.783665"}
         };
 
         // ════════════════════════════════════════════════════════════════
         //  STATE MAPS
         // ════════════════════════════════════════════════════════════════
-        private final Map<String, String>  productNames  = new HashMap<>();
-        private final Map<String, String>  productPrices = new HashMap<>();
-        private final Map<String, Integer> likes         = new HashMap<>();
-        private final Map<String, Integer> dislikes      = new HashMap<>();
-        private final Map<Long,   String>  userLang      = new HashMap<>();
-        private final Map<Long,   String>  category      = new HashMap<>();
-        private final Map<Long,   String>  subCategory   = new HashMap<>();
-        private final Map<Long,   String>  step          = new HashMap<>();
-        private final Map<Long,   String>  userName      = new HashMap<>();
-        private final Map<Long,   String>  userProduct   = new HashMap<>();
-        private final Map<Long,   String>  userProductId = new HashMap<>();
-        private final Map<Long,   String>  userPhone     = new HashMap<>();
-        private final Map<Long,   String>  userFilial    = new HashMap<>();
+        private final Map<String, String>  productNames   = new HashMap<>();
+        private final Map<String, String>  productPrices  = new HashMap<>();
+        private final Map<String, Integer> likes          = new HashMap<>();
+        private final Map<String, Integer> dislikes       = new HashMap<>();
+        // ── Reyting: productId -> [sumRating, countRating]
+        private final Map<String, int[]>   ratings        = new HashMap<>();
+        // ── Kim reyting berdi: "chatId_productId" -> true
+        private final Set<String>          ratedUsers     = new HashSet<>();
+        private final Map<Long,   String>  userLang       = new HashMap<>();
+        private final Map<Long,   String>  category       = new HashMap<>();
+        private final Map<Long,   String>  subCategory    = new HashMap<>();
+        private final Map<Long,   String>  step           = new HashMap<>();
+        private final Map<Long,   String>  userName       = new HashMap<>();
+        private final Map<Long,   String>  userProduct    = new HashMap<>();
+        private final Map<Long,   String>  userProductId  = new HashMap<>();
+        private final Map<Long,   String>  userPhone      = new HashMap<>();
+        private final Map<Long,   String>  userFilial     = new HashMap<>();
 
         private static final Long ADMIN_ID = 6387107992L;
 
@@ -655,6 +658,44 @@ public class Mybot extends TelegramLongPollingBot {
                         productNames.put(p[0], p[1]);
                         productPrices.put(p[0], p[2]);
                 }
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  REYTING YORDAMCHI METODLARI
+        // ════════════════════════════════════════════════════════════════
+        private String getRatingStars(String productId) {
+                int[] r = ratings.getOrDefault(productId, new int[]{0, 0});
+                if (r[1] == 0) return "⭐️ —";
+                double avg = (double) r[0] / r[1];
+                int full = (int) avg;
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < full; i++) sb.append("⭐");
+                if (avg - full >= 0.5) sb.append("✨");
+                sb.append(String.format(" %.1f/5 (%d ta baho)", avg, r[1]));
+                return sb.toString();
+        }
+
+        private InlineKeyboardMarkup buildRatingKeyboard(String productId, String lang, int like, int dislike) {
+                boolean isRu = lang.equals("ru");
+                boolean isEn = lang.equals("en");
+                List<InlineKeyboardButton> ratingRow = List.of(
+                        createInlineBtn("⭐1", "rate_" + productId + "_1"),
+                        createInlineBtn("⭐2", "rate_" + productId + "_2"),
+                        createInlineBtn("⭐3", "rate_" + productId + "_3"),
+                        createInlineBtn("⭐4", "rate_" + productId + "_4"),
+                        createInlineBtn("⭐5", "rate_" + productId + "_5")
+                );
+                List<InlineKeyboardButton> voteRow = List.of(
+                        createInlineBtn("👍 " + like,    "like_"    + productId),
+                        createInlineBtn("👎 " + dislike, "dislike_" + productId)
+                );
+                String buyLabel = isRu ? "🛒 Купить" : (isEn ? "🛒 Buy Now" : "🛒 Sotib olish");
+                List<InlineKeyboardButton> buyRow = List.of(
+                        createInlineBtn(buyLabel, "buy_" + productId)
+                );
+                InlineKeyboardMarkup mk = new InlineKeyboardMarkup();
+                mk.setKeyboard(List.of(ratingRow, voteRow, buyRow));
+                return mk;
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -678,7 +719,7 @@ public class Mybot extends TelegramLongPollingBot {
                 String lang   = userLang.getOrDefault(chatId, "uz");
 
                 // ── Til tanlash ─────────────────────────────────────────────
-                if (data.equals("uz") || data.equals("ru")) {
+                if (data.equals("uz") || data.equals("ru") || data.equals("en")) {
                         userLang.put(chatId, data);
                         sendWithKeyboard(chatId, getWelcomeText(data), getMainMenu(data));
                         return;
@@ -709,12 +750,64 @@ public class Mybot extends TelegramLongPollingBot {
                                                 + "Товар: *" + name + "*\n"
                                                 + "💰 Цена: *" + price + "*\n\n"
                                                 + "👤 Введите ваше имя:", getBackKeyboard(lang));
+                        } else if (lang.equals("en")) {
+                                sendWithKeyboard(chatId,
+                                        "🛒 *ORDER PLACEMENT*\n\n"
+                                                + "Product: *" + name + "*\n"
+                                                + "💰 Price: *" + price + "*\n\n"
+                                                + "👤 Enter your name:", getBackKeyboard(lang));
                         } else {
                                 sendWithKeyboard(chatId,
                                         "🛒 *BUYURTMA BERISH*\n\n"
                                                 + "Mahsulot: *" + name + "*\n"
                                                 + "💰 Narxi: *" + price + "*\n\n"
                                                 + "👤 Ismingizni kiriting:", getBackKeyboard(lang));
+                        }
+                        return;
+                }
+
+                // ── Reyting (⭐) ─────────────────────────────────────────────
+                if (data.startsWith("rate_")) {
+                        // format: rate_<productId>_<score>
+                        String[] parts = data.split("_");
+                        if (parts.length >= 3) {
+                                int score;
+                                try { score = Integer.parseInt(parts[parts.length - 1]); }
+                                catch (NumberFormatException e) { return; }
+                                // productId = everything between "rate_" and "_<score>"
+                                String pid = data.substring(5, data.lastIndexOf("_"));
+                                String rateKey = chatId + "_" + pid;
+                                if (ratedUsers.contains(rateKey)) {
+                                        // Already rated — just answer query silently
+                                        return;
+                                }
+                                ratedUsers.add(rateKey);
+                                int[] r = ratings.computeIfAbsent(pid, k -> new int[]{0, 0});
+                                r[0] += score;
+                                r[1]++;
+
+                                send(ADMIN_ID,
+                                        "⭐ *REYTING BERILDI*\n"
+                                                + "📦 " + productNames.getOrDefault(pid, pid) + "\n"
+                                                + "🆔 Chat ID: `" + chatId + "`\n"
+                                                + "⭐ Baho: *" + score + "/5*");
+
+                                // Rebuild caption with updated rating
+                                String[] product = getProduct(pid);
+                                if (product != null) {
+                                        int like    = likes.getOrDefault(pid, 0);
+                                        int dislike = dislikes.getOrDefault(pid, 0);
+                                        String newCaption = buildCaption(product, lang, like, dislike);
+                                        if (newCaption.length() > 1024) newCaption = newCaption.substring(0, 1020) + "...";
+
+                                        EditMessageCaption edit = new EditMessageCaption();
+                                        edit.setChatId(chatId.toString());
+                                        edit.setMessageId(update.getCallbackQuery().getMessage().getMessageId());
+                                        edit.setParseMode("Markdown");
+                                        edit.setCaption(newCaption);
+                                        edit.setReplyMarkup(buildRatingKeyboard(pid, lang, like, dislike));
+                                        executeSafe(edit);
+                                }
                         }
                         return;
                 }
@@ -734,6 +827,14 @@ public class Mybot extends TelegramLongPollingBot {
                                                 + "👤 Владелец: *Alisherov Ismoil*\n"
                                                 + "🏦 Банк: *Uzcard*\n\n"
                                                 + "📌 После оплаты отправьте скриншот:\n"
+                                                + "📞 @AppleStoreUz\\_Help");
+                        } else if (lang.equals("en")) {
+                                send(chatId,
+                                        "💳 *PAYMENT DETAILS*\n\n"
+                                                + "`8600 1234 5678 9012`\n\n"
+                                                + "👤 Owner: *Alisherov Ismoil*\n"
+                                                + "🏦 Bank: *Uzcard*\n\n"
+                                                + "📌 After payment send screenshot to:\n"
                                                 + "📞 @AppleStoreUz\\_Help");
                         } else {
                                 send(chatId,
@@ -759,19 +860,22 @@ public class Mybot extends TelegramLongPollingBot {
                 // ── Orqaga / Bekor qilish ────────────────────────────────────
                 boolean isBack = text.equals("🔙 Orqaga")    || text.equals("❌ Bekor qilish")
                         || text.equals("⬅️ Qaytish")   || text.equals("🔙 Назад")
-                        || text.equals("❌ Отмена");
+                        || text.equals("❌ Отмена")     || text.equals("🔙 Back")
+                        || text.equals("❌ Cancel");
                 if (isBack) {
                         if (subCategory.containsKey(chatId)) {
                                 subCategory.remove(chatId);
                                 clearStep(chatId);
                                 sendWithKeyboard(chatId,
-                                        lang.equals("ru") ? "Выберите категорию 👇" : "Kategoriyani tanlang 👇",
+                                        lang.equals("ru") ? "Выберите категорию 👇"
+                                                : (lang.equals("en") ? "Choose a category 👇" : "Kategoriyani tanlang 👇"),
                                         getAppleMenu(lang));
                                 return;
                         }
                         clearStep(chatId);
                         category.remove(chatId);
-                        String menuText = lang.equals("ru") ? "🏠 *Главное меню*" : "🏠 *Asosiy menyu*";
+                        String menuText = lang.equals("ru") ? "🏠 *Главное меню*"
+                                : (lang.equals("en") ? "🏠 *Main Menu*" : "🏠 *Asosiy menyu*");
                         sendWithKeyboard(chatId, menuText, getMainMenu(lang));
                         return;
                 }
@@ -811,6 +915,10 @@ public class Mybot extends TelegramLongPollingBot {
                                         sendWithKeyboard(chatId,
                                                 "📞 Введите ваш номер телефона:\n_(Пример: +998901234567)_",
                                                 getPhoneKeyboard(lang));
+                                } else if (lang.equals("en")) {
+                                        sendWithKeyboard(chatId,
+                                                "📞 Enter your phone number:\n_(Example: +998901234567)_",
+                                                getPhoneKeyboard(lang));
                                 } else {
                                         sendWithKeyboard(chatId,
                                                 "📞 Telefon raqamingizni kiriting:\n_(Misol: +998901234567)_",
@@ -846,6 +954,14 @@ public class Mybot extends TelegramLongPollingBot {
                                                         + "📞 Скоро с вами свяжется наш менеджер.\n"
                                                         + "🕐 Время работы: 09:00 – 21:00",
                                                 getMainMenu(lang));
+                                } else if (lang.equals("en")) {
+                                        sendWithKeyboard(chatId,
+                                                "✅ *ORDER ACCEPTED!*\n\n"
+                                                        + "📦 Product: *" + productName + "*\n"
+                                                        + "💰 Price: *" + productPrice + "*\n\n"
+                                                        + "📞 Our manager will contact you soon.\n"
+                                                        + "🕐 Working hours: 09:00 – 21:00",
+                                                getMainMenu(lang));
                                 } else {
                                         sendWithKeyboard(chatId,
                                                 "✅ *BUYURTMANGIZ QABUL QILINDI!*\n\n"
@@ -872,6 +988,10 @@ public class Mybot extends TelegramLongPollingBot {
                                         sendWithKeyboard(chatId,
                                                 "✅ *Ваше сообщение отправлено!*\n\nАдмин скоро ответит. 🙏",
                                                 getMainMenu(lang));
+                                } else if (lang.equals("en")) {
+                                        sendWithKeyboard(chatId,
+                                                "✅ *Your message has been sent!*\n\nAdmin will reply soon. 🙏",
+                                                getMainMenu(lang));
                                 } else {
                                         sendWithKeyboard(chatId,
                                                 "✅ *Xabaringiz yuborildi!*\n\nAdmin tez orada javob beradi. 🙏",
@@ -888,6 +1008,8 @@ public class Mybot extends TelegramLongPollingBot {
                                 step.put(chatId, "FEEDBACK_FILIAL");
                                 if (lang.equals("ru")) {
                                         sendWithKeyboard(chatId, "🏢 Выберите магазин:", getFilialKeyboard());
+                                } else if (lang.equals("en")) {
+                                        sendWithKeyboard(chatId, "🏢 Select a store:", getFilialKeyboard());
                                 } else {
                                         sendWithKeyboard(chatId, "🏢 Do'konni tanlang:", getFilialKeyboard());
                                 }
@@ -900,6 +1022,10 @@ public class Mybot extends TelegramLongPollingBot {
                                 if (lang.equals("ru")) {
                                         sendWithKeyboard(chatId,
                                                 "📝 Напишите ваш отзыв:\n_(О сервисе, товаре, доставке)_",
+                                                getBackKeyboard(lang));
+                                } else if (lang.equals("en")) {
+                                        sendWithKeyboard(chatId,
+                                                "📝 Write your review:\n_(About service, product, delivery)_",
                                                 getBackKeyboard(lang));
                                 } else {
                                         sendWithKeyboard(chatId,
@@ -923,6 +1049,10 @@ public class Mybot extends TelegramLongPollingBot {
                                         sendWithKeyboard(chatId,
                                                 "✅ *Спасибо за ваш отзыв!* 🙏\n\nВы помогаете нам становиться лучше!",
                                                 getMainMenu(lang));
+                                } else if (lang.equals("en")) {
+                                        sendWithKeyboard(chatId,
+                                                "✅ *Thank you for your review!* 🙏\n\nYou help us become better!",
+                                                getMainMenu(lang));
                                 } else {
                                         sendWithKeyboard(chatId,
                                                 "✅ *Rahmat! Fikringiz qabul qilindi.* 🙏\n\nSiz bizni yaxshilashga yordam berasiz!",
@@ -942,54 +1072,63 @@ public class Mybot extends TelegramLongPollingBot {
                         case "📱 iPhone":
                                 subCategory.put(chatId, "iphone");
                                 sendWithKeyboard(chatId,
-                                        lang.equals("ru") ? "📱 Выберите iPhone модель 👇" : "📱 iPhone modelini tanlang 👇",
+                                        lang.equals("ru") ? "📱 Выберите iPhone модель 👇"
+                                                : (lang.equals("en") ? "📱 Select iPhone model 👇" : "📱 iPhone modelini tanlang 👇"),
                                         getIphoneMenu(lang));
                                 break;
                         case "💻 MacBook":
                                 subCategory.put(chatId, "macbook");
                                 sendWithKeyboard(chatId,
-                                        lang.equals("ru") ? "💻 Выберите MacBook модель 👇" : "💻 MacBook modelini tanlang 👇",
+                                        lang.equals("ru") ? "💻 Выберите MacBook модель 👇"
+                                                : (lang.equals("en") ? "💻 Select MacBook model 👇" : "💻 MacBook modelini tanlang 👇"),
                                         getMacbookMenu(lang));
                                 break;
                         case "⌚️ Apple Watch":
                                 subCategory.put(chatId, "watch");
                                 sendWithKeyboard(chatId,
-                                        lang.equals("ru") ? "⌚️ Выберите Apple Watch модель 👇" : "⌚️ Apple Watch modelini tanlang 👇",
+                                        lang.equals("ru") ? "⌚️ Выберите Apple Watch модель 👇"
+                                                : (lang.equals("en") ? "⌚️ Select Apple Watch model 👇" : "⌚️ Apple Watch modelini tanlang 👇"),
                                         getWatchMenu(lang));
                                 break;
                         case "🎧 AirPods":
                                 subCategory.put(chatId, "airpods");
                                 sendWithKeyboard(chatId,
-                                        lang.equals("ru") ? "🎧 Выберите AirPods модель 👇" : "🎧 AirPods modelini tanlang 👇",
+                                        lang.equals("ru") ? "🎧 Выберите AirPods модель 👇"
+                                                : (lang.equals("en") ? "🎧 Select AirPods model 👇" : "🎧 AirPods modelini tanlang 👇"),
                                         getAirpodsMenu(lang));
                                 break;
                         case "📱 iPad":
                                 subCategory.put(chatId, "ipad");
                                 sendWithKeyboard(chatId,
-                                        lang.equals("ru") ? "📱 Выберите iPad модель 👇" : "📱 iPad modelini tanlang 👇",
+                                        lang.equals("ru") ? "📱 Выберите iPad модель 👇"
+                                                : (lang.equals("en") ? "📱 Select iPad model 👇" : "📱 iPad modelini tanlang 👇"),
                                         getIpadMenu(lang));
                                 break;
                         case "🔊 HomePod":
                                 subCategory.put(chatId, "homepod");
                                 sendWithKeyboard(chatId,
-                                        lang.equals("ru") ? "🔊 Выберите HomePod модель 👇" : "🔊 HomePod modelini tanlang 👇",
+                                        lang.equals("ru") ? "🔊 Выберите HomePod модель 👇"
+                                                : (lang.equals("en") ? "🔊 Select HomePod model 👇" : "🔊 HomePod modelini tanlang 👇"),
                                         getHomepodMenu(lang));
                                 break;
                         case "🥽 Vision Pro":
                                 subCategory.put(chatId, "vision");
                                 sendWithKeyboard(chatId,
-                                        lang.equals("ru") ? "🥽 Выберите Vision Pro модель 👇" : "🥽 Vision Pro modelini tanlang 👇",
+                                        lang.equals("ru") ? "🥽 Выберите Vision Pro модель 👇"
+                                                : (lang.equals("en") ? "🥽 Select Vision Pro model 👇" : "🥽 Vision Pro modelini tanlang 👇"),
                                         getVisionMenu(lang));
                                 break;
                         case "🖥 Mac mini":
                                 subCategory.put(chatId, "mac");
                                 sendWithKeyboard(chatId,
-                                        lang.equals("ru") ? "🖥 Выберите Mac модель 👇" : "🖥 Mac modelini tanlang 👇",
+                                        lang.equals("ru") ? "🖥 Выберите Mac модель 👇"
+                                                : (lang.equals("en") ? "🖥 Select Mac model 👇" : "🖥 Mac modelini tanlang 👇"),
                                         getMacMenu(lang));
                                 break;
                         default:
                                 sendWithKeyboard(chatId,
-                                        lang.equals("ru") ? "Выберите категорию 👇" : "Kategoriyani tanlang 👇",
+                                        lang.equals("ru") ? "Выберите категорию 👇"
+                                                : (lang.equals("en") ? "Choose a category 👇" : "Kategoriyani tanlang 👇"),
                                         getAppleMenu(lang));
                 }
         }
@@ -1002,7 +1141,6 @@ public class Mybot extends TelegramLongPollingBot {
                 if (text.equals("📱 iPhone 15"))              { sendProduct(chatId, getProduct("iphone15")); return; }
                 if (text.equals("📱 iPhone 15 Pro Max"))      { sendProduct(chatId, getProduct("iphone15promax")); return; }
                 if (text.equals("📱 iPhone 16"))              { sendProduct(chatId, getProduct("iphone16")); return; }
-                // 🆕 iPhone 17 Pro Max
                 if (text.equals("📱 iPhone 17 Pro Max"))      { sendProduct(chatId, getProduct("iphone17promax")); return; }
 
                 if (text.equals("💻 MacBook Air M2"))         { sendProduct(chatId, getProduct("macbook_air_m2")); return; }
@@ -1042,7 +1180,8 @@ public class Mybot extends TelegramLongPollingBot {
 
                 String sub = subCategory.getOrDefault(chatId, "");
                 sendWithKeyboard(chatId,
-                        lang.equals("ru") ? "Выберите модель 👇" : "Modelni tanlang 👇",
+                        lang.equals("ru") ? "Выберите модель 👇"
+                                : (lang.equals("en") ? "Select a model 👇" : "Modelni tanlang 👇"),
                         getSubMenuByKey(sub, lang));
         }
 
@@ -1051,6 +1190,7 @@ public class Mybot extends TelegramLongPollingBot {
         // ════════════════════════════════════════════════════════════════
         private void handleMainMenu(Long chatId, String text, Message message, String lang) {
                 boolean isRu = lang.equals("ru");
+                boolean isEn = lang.equals("en");
 
                 if (text.equals("/start")) {
                         sendStart(chatId);
@@ -1061,230 +1201,258 @@ public class Mybot extends TelegramLongPollingBot {
                         category.put(chatId, "apple");
                         subCategory.remove(chatId);
                         sendWithKeyboard(chatId,
-                                isRu
-                                        ? "✨ *APPLE PREMIUM CATALOG*\n\n🍎 Все товары *100% Original*\n🛡 *1 год гарантии*\n🚚 Бесплатная доставка по Ташкенту\n\nВыберите категорию 👇"
-                                        : "✨ *APPLE PREMIUM CATALOG*\n\n🍎 Barcha mahsulotlar *100% Original*\n🛡 *1 yil rasmiy kafolat*\n🚚 Toshkentda *bepul yetkazib berish*\n\nKategoriyani tanlang 👇",
+                                isRu ? "✨ *APPLE PREMIUM CATALOG*\n\n🍎 Все товары *100% Original*\n🛡 *1 год гарантии*\n🚚 Бесплатная доставка по Ташкенту\n\nВыберите категорию 👇"
+                                        : (isEn ? "✨ *APPLE PREMIUM CATALOG*\n\n🍎 All products *100% Original*\n🛡 *1 year warranty*\n🚚 Free delivery in Tashkent\n\nChoose a category 👇"
+                                           : "✨ *APPLE PREMIUM CATALOG*\n\n🍎 Barcha mahsulotlar *100% Original*\n🛡 *1 yil rasmiy kafolat*\n🚚 Toshkentda *bepul yetkazib berish*\n\nKategoriyani tanlang 👇"),
                                 getAppleMenu(lang));
                         return;
                 }
 
-                if (text.equals("💰 Narxlar") || text.equals("💰 Цены")) {
-                        send(chatId, isRu
-                                ? "💰 *ПРАЙС-ЛИСТ*\n\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "📱 iPhone 14 — *799$*\n"
-                                  + "📱 iPhone 15 — *999$*\n"
-                                  + "📱 iPhone 15 Pro Max — *1 200$*\n"
-                                  + "📱 iPhone 16 — *1 099$*\n"
-                                  + "📱 iPhone 17 Pro Max — *1 399$* 🆕\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "💻 MacBook Air M2 — *1 099$*\n"
-                                  + "💻 MacBook Pro M3 14\" — *1 800$*\n"
-                                  + "💻 MacBook Pro M3 16\" — *2 499$*\n"
-                                  + "💻 MacBook Air M3 — *1 299$*\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "⌚️ Watch SE 2 — *249$*\n"
-                                  + "⌚️ Watch Series 8 — *399$*\n"
-                                  + "⌚️ Watch Series 9 — *500$*\n"
-                                  + "⌚️ Watch Ultra 2 — *799$*\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "🎧 AirPods 3 — *179$*\n"
-                                  + "🎧 AirPods Pro 2 — *279$–300$*\n"
-                                  + "🎧 AirPods Max — *549$*\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "📱 iPad mini 6 — *499$*\n"
-                                  + "📱 iPad Air M1 — *749$*\n"
-                                  + "📱 iPad Pro M2 — *999$*\n"
-                                  + "📱 iPad Pro M4 — *1 299$*\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "🔊 HomePod mini — *99$*\n"
-                                  + "🔊 HomePod 2 — *299$*\n"
-                                  + "🥽 Vision Pro — *3 499$–3 899$*\n"
-                                  + "🖥 Mac mini M2 — *599$*\n"
-                                  + "🖥 Mac Studio — *1 999$*\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "💳 Рассрочка 0% — 12 месяцев!\n"
-                                  + "📞 Детали: @AppleStoreUz\\_Help"
-                                : "💰 *NARXLAR RO'YXATI*\n\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "📱 iPhone 14 — *799$*\n"
-                                  + "📱 iPhone 15 — *999$*\n"
-                                  + "📱 iPhone 15 Pro Max — *1 200$*\n"
-                                  + "📱 iPhone 16 — *1 099$*\n"
-                                  + "📱 iPhone 17 Pro Max — *1 399$* 🆕\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "💻 MacBook Air M2 — *1 099$*\n"
-                                  + "💻 MacBook Pro M3 14\" — *1 800$*\n"
-                                  + "💻 MacBook Pro M3 16\" — *2 499$*\n"
-                                  + "💻 MacBook Air M3 — *1 299$*\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "⌚️ Watch SE 2 — *249$*\n"
-                                  + "⌚️ Watch Series 8 — *399$*\n"
-                                  + "⌚️ Watch Series 9 — *500$*\n"
-                                  + "⌚️ Watch Ultra 2 — *799$*\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "🎧 AirPods 3 — *179$*\n"
-                                  + "🎧 AirPods Pro 2 — *279$–300$*\n"
-                                  + "🎧 AirPods Max — *549$*\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "📱 iPad mini 6 — *499$*\n"
-                                  + "📱 iPad Air M1 — *749$*\n"
-                                  + "📱 iPad Pro M2 — *999$*\n"
-                                  + "📱 iPad Pro M4 — *1 299$*\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "🔊 HomePod mini — *99$*\n"
-                                  + "🔊 HomePod 2 — *299$*\n"
-                                  + "🥽 Vision Pro — *3 499$–3 899$*\n"
-                                  + "🖥 Mac mini M2 — *599$*\n"
-                                  + "🖥 Mac Studio — *1 999$*\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "💳 Bo'lib to'lash 0% — 12 oy!\n"
-                                  + "📞 Batafsil: @AppleStoreUz\\_Help");
+                if (text.equals("💰 Narxlar") || text.equals("💰 Цены") || text.equals("💰 Prices")) {
+                        String priceHeader = isRu ? "💰 *ПРАЙС-ЛИСТ*" : (isEn ? "💰 *PRICE LIST*" : "💰 *NARXLAR RO'YXATI*");
+                        send(chatId, priceHeader + "\n\n"
+                                + "━━━━━━━━━━━━━━━━━━━\n"
+                                + "📱 iPhone 14 — *799$*\n"
+                                + "📱 iPhone 15 — *999$*\n"
+                                + "📱 iPhone 15 Pro Max — *1 200$*\n"
+                                + "📱 iPhone 16 — *1 099$*\n"
+                                + "📱 iPhone 17 Pro Max — *1 630$* 🆕\n"
+                                + "━━━━━━━━━━━━━━━━━━━\n"
+                                + "💻 MacBook Air M2 — *1 099$*\n"
+                                + "💻 MacBook Pro M3 14\" — *1 800$*\n"
+                                + "💻 MacBook Pro M3 16\" — *2 499$*\n"
+                                + "💻 MacBook Air M3 — *1 299$*\n"
+                                + "━━━━━━━━━━━━━━━━━━━\n"
+                                + "⌚️ Watch SE 2 — *249$*\n"
+                                + "⌚️ Watch Series 8 — *399$*\n"
+                                + "⌚️ Watch Series 9 — *500$*\n"
+                                + "⌚️ Watch Ultra 2 — *799$*\n"
+                                + "━━━━━━━━━━━━━━━━━━━\n"
+                                + "🎧 AirPods 3 — *179$*\n"
+                                + "🎧 AirPods Pro 2 — *279$–300$*\n"
+                                + "🎧 AirPods Max — *549$*\n"
+                                + "━━━━━━━━━━━━━━━━━━━\n"
+                                + "📱 iPad mini 6 — *499$*\n"
+                                + "📱 iPad Air M1 — *749$*\n"
+                                + "📱 iPad Pro M2 — *999$*\n"
+                                + "📱 iPad Pro M4 — *1 299$*\n"
+                                + "━━━━━━━━━━━━━━━━━━━\n"
+                                + "🔊 HomePod mini — *99$*\n"
+                                + "🔊 HomePod 2 — *299$*\n"
+                                + "🥽 Vision Pro — *3 499$–3 899$*\n"
+                                + "🖥 Mac mini M2 — *599$*\n"
+                                + "🖥 Mac Studio — *1 999$*\n"
+                                + "━━━━━━━━━━━━━━━━━━━\n"
+                                + (isRu ? "💳 Рассрочка 0% — 12 месяцев!\n📞 Детали: @AppleStoreUz\\_Help"
+                                : (isEn ? "💳 Installment 0% — 12 months!\n📞 Details: @AppleStoreUz\\_Help"
+                                   : "💳 Bo'lib to'lash 0% — 12 oy!\n📞 Batafsil: @AppleStoreUz\\_Help")));
                         return;
                 }
 
-                if (text.equals("☎️ Bog'lanish") || text.equals("☎️ Связаться")) {
+                if (text.equals("☎️ Bog'lanish") || text.equals("☎️ Связаться") || text.equals("☎️ Contact")) {
                         step.put(chatId, "CONTACT");
                         sendWithKeyboard(chatId,
-                                isRu
-                                        ? "☎️ *СВЯЗЬ С НАМИ*\n\n📞 +998 (71) 202-02-12\n📱 @AppleStoreUz\\_Help\n\nИли напишите ваш вопрос 👇"
-                                        : "☎️ *BIZ BILAN BOG'LANISH*\n\n📞 +998 (71) 202-02-12\n📱 @AppleStoreUz\\_Help\n\nYoki savolingizni yozing 👇",
+                                isRu ? "☎️ *СВЯЗЬ С НАМИ*\n\n📞 +998 (71) 202-02-12\n📱 @AppleStoreUz\\_Help\n\nИли напишите ваш вопрос 👇"
+                                        : (isEn ? "☎️ *CONTACT US*\n\n📞 +998 (71) 202-02-12\n📱 @AppleStoreUz\\_Help\n\nOr write your question 👇"
+                                           : "☎️ *BIZ BILAN BOG'LANISH*\n\n📞 +998 (71) 202-02-12\n📱 @AppleStoreUz\\_Help\n\nYoki savolingizni yozing 👇"),
                                 getBackKeyboard(lang));
                         return;
                 }
 
-                if (text.equals("💳 To'lov") || text.equals("💳 Оплата")) {
+                if (text.equals("💳 To'lov") || text.equals("💳 Оплата") || text.equals("💳 Payment")) {
                         SendMessage payMsg = new SendMessage();
                         payMsg.setChatId(chatId.toString());
                         payMsg.setParseMode("Markdown");
-                        payMsg.setText(isRu
-                                ? "💳 *СПОСОБЫ ОПЛАТЫ*\n\n"
-                                  + "💵 *Наличные* — при получении\n"
-                                  + "📲 *Click / Payme* — онлайн\n"
-                                  + "🏦 *Банковская карта* — предоплата\n"
-                                  + "💳 *Рассрочка* — 0% на 12 месяцев\n\n"
-                                  + "Нажмите для получения номера карты 👇"
-                                : "💳 *TO'LOV USULLARI*\n\n"
-                                  + "💵 *Naqd pul* — yetkazib berilganda\n"
-                                  + "📲 *Click / Payme* — onlayn\n"
-                                  + "🏦 *Bank kartasi* — oldindan to'lov\n"
-                                  + "💳 *Bo'lib to'lash* — 0% 12 oygacha\n\n"
-                                  + "Karta raqamini olish uchun bosing 👇");
+                        payMsg.setText(
+                                isRu ? "💳 *СПОСОБЫ ОПЛАТЫ*\n\n💵 *Наличные* — при получении\n📲 *Click / Payme* — онлайн\n🏦 *Банковская карта* — предоплата\n💳 *Рассрочка* — 0% на 12 месяцев\n\nНажмите для получения номера карты 👇"
+                                        : (isEn ? "💳 *PAYMENT METHODS*\n\n💵 *Cash* — on delivery\n📲 *Click / Payme* — online\n🏦 *Bank card* — prepayment\n💳 *Installment* — 0% for 12 months\n\nPress to get card number 👇"
+                                           : "💳 *TO'LOV USULLARI*\n\n💵 *Naqd pul* — yetkazib berilganda\n📲 *Click / Payme* — onlayn\n🏦 *Bank kartasi* — oldindan to'lov\n💳 *Bo'lib to'lash* — 0% 12 oygacha\n\nKarta raqamini olish uchun bosing 👇"));
                         InlineKeyboardMarkup payMk = new InlineKeyboardMarkup();
                         payMk.setKeyboard(List.of(List.of(
-                                createInlineBtn(isRu ? "💳 Получить номер карты" : "💳 Karta raqamini olish", "card_info")
+                                createInlineBtn(isRu ? "💳 Получить номер карты" : (isEn ? "💳 Get card number" : "💳 Karta raqamini olish"), "card_info")
                         )));
                         payMsg.setReplyMarkup(payMk);
                         executeSafe(payMsg);
                         return;
                 }
 
-                if (text.equals("🚚 Yetkazib berish") || text.equals("🚚 Доставка")) {
-                        send(chatId, isRu
-                                ? "🚚 *ДОСТАВКА*\n\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "📍 *ТАШКЕНТ*\n"
-                                  + "⚡️ 2–4 часа | 🆓 Бесплатно\n"
-                                  + "🚗 Курьер до двери | 🕐 09:00–21:00\n\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "🇺🇿 *РЕГИОНЫ*\n"
-                                  + "🚀 24–48 часов | 📦 Почта/курьер\n"
-                                  + "🔍 Трекинг-код\n\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "🛡 *ГАРАНТИЯ*\n"
-                                  + "🔄 Замена в течение 24 часов\n"
-                                  + "✅ 1 год официальной гарантии\n\n"
-                                  + "📞 +998 (71) 202-02-12"
-                                : "🚚 *YETKAZIB BERISH*\n\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "📍 *TOSHKENT*\n"
-                                  + "⚡️ 2–4 soat | 🆓 Bepul\n"
-                                  + "🚗 Eshigingizgacha | 🕐 09:00–21:00\n\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "🇺🇿 *VILOYATLAR*\n"
-                                  + "🚀 24–48 soat | 📦 Pochta/kuryer\n"
-                                  + "🔍 Tracking kod beriladi\n\n"
-                                  + "━━━━━━━━━━━━━━━━━━━\n"
-                                  + "🛡 *KAFOLAT*\n"
-                                  + "🔄 24 soat ichida almashtirish\n"
-                                  + "✅ 1 yil rasmiy kafolat\n\n"
-                                  + "📞 +998 (71) 202-02-12");
+                if (text.equals("🚚 Yetkazib berish") || text.equals("🚚 Доставка") || text.equals("🚚 Delivery")) {
+                        send(chatId,
+                                isRu ? "🚚 *ДОСТАВКА*\n\n━━━━━━━━━━━━━━━━━━━\n📍 *ТАШКЕНТ*\n⚡️ 2–4 часа | 🆓 Бесплатно\n🚗 Курьер до двери | 🕐 09:00–21:00\n\n━━━━━━━━━━━━━━━━━━━\n🇺🇿 *РЕГИОНЫ*\n🚀 24–48 часов | 📦 Почта/курьер\n🔍 Трекинг-код\n\n━━━━━━━━━━━━━━━━━━━\n🛡 *ГАРАНТИЯ*\n🔄 Замена в течение 24 часов\n✅ 1 год официальной гарантии\n\n📞 +998 (71) 202-02-12"
+                                        : (isEn ? "🚚 *DELIVERY*\n\n━━━━━━━━━━━━━━━━━━━\n📍 *TASHKENT*\n⚡️ 2–4 hours | 🆓 Free\n🚗 Door-to-door | 🕐 09:00–21:00\n\n━━━━━━━━━━━━━━━━━━━\n🇺🇿 *REGIONS*\n🚀 24–48 hours | 📦 Post/courier\n🔍 Tracking code provided\n\n━━━━━━━━━━━━━━━━━━━\n🛡 *WARRANTY*\n🔄 Replacement within 24 hours\n✅ 1 year official warranty\n\n📞 +998 (71) 202-02-12"
+                                           : "🚚 *YETKAZIB BERISH*\n\n━━━━━━━━━━━━━━━━━━━\n📍 *TOSHKENT*\n⚡️ 2–4 soat | 🆓 Bepul\n🚗 Eshigingizgacha | 🕐 09:00–21:00\n\n━━━━━━━━━━━━━━━━━━━\n🇺🇿 *VILOYATLAR*\n🚀 24–48 soat | 📦 Pochta/kuryer\n🔍 Tracking kod beriladi\n\n━━━━━━━━━━━━━━━━━━━\n🛡 *KAFOLAT*\n🔄 24 soat ichida almashtirish\n✅ 1 yil rasmiy kafolat\n\n📞 +998 (71) 202-02-12"));
                         return;
                 }
 
-                if (text.equals("📍 Manzillar") || text.equals("📍 Адреса")) {
-                        StringBuilder sb = new StringBuilder();
-                        sb.append(isRu ? "📍 *НАШИ МАГАЗИНЫ*\n\n" : "📍 *BIZNING DO'KONLARIMIZ*\n\n");
-                        sb.append("━━━━━━━━━━━━━━━━━━━\n");
-                        for (String f : FILIALS) { sb.append(f).append("\n"); }
-                        sb.append("━━━━━━━━━━━━━━━━━━━\n");
-                        sb.append(isRu
-                                ? "🕐 Пн–Вс: 09:00 – 21:00\n📞 +998 (71) 202-02-12"
-                                : "🕐 Du–Ya: 09:00 – 21:00\n📞 +998 (71) 202-02-12");
-                        send(chatId, sb.toString());
+                // ── 📍 Manzillar — Location bilan ───────────────────────────
+                if (text.equals("📍 Manzillar") || text.equals("📍 Адреса") || text.equals("📍 Addresses")) {
+                        String header = isRu
+                                ? "📍 *НАШИ МАГАЗИНЫ*\n\nВыберите магазин чтобы получить геолокацию 👇\n\n━━━━━━━━━━━━━━━━━━━"
+                                : (isEn
+                                   ? "📍 *OUR STORES*\n\nSelect a store to get its location 👇\n\n━━━━━━━━━━━━━━━━━━━"
+                                   : "📍 *BIZNING DO'KONLARIMIZ*\n\nJoy ko'rish uchun do'konni tanlang 👇\n\n━━━━━━━━━━━━━━━━━━━");
+                        sendWithKeyboard(chatId, header, getFilialLocationKeyboard(lang));
+                        step.put(chatId, "SHOW_LOCATION");
                         return;
                 }
 
-                if (text.equals("📊 Natijalar") || text.equals("📊 Достижения")) {
-                        send(chatId, isRu
-                                ? "📊 *НАШИ ДОСТИЖЕНИЯ*\n\n"
-                                  + "🏆 *500 000+* довольных клиентов\n"
-                                  + "✅ *100%* оригинальные товары\n"
-                                  + "🛡 *1 год* официальной гарантии\n"
-                                  + "🚀 *2–4 часа* доставка по Ташкенту\n"
-                                  + "⭐️ *4.9 / 5* рейтинг клиентов\n"
-                                  + "🏢 *8 магазинов* по Узбекистану\n"
-                                  + "📅 На рынке с *2018 года*\n"
-                                  + "🤝 Официальный партнёр *Apple*\n\n"
-                                  + "Рады служить вам! 🍎"
-                                : "📊 *BIZNING NATIJALARIMIZ*\n\n"
-                                  + "🏆 *500 000+* mamnun mijoz\n"
-                                  + "✅ *100%* original mahsulotlar\n"
-                                  + "🛡 *1 yil* rasmiy kafolat\n"
-                                  + "🚀 *2–4 soat* Toshkentda yetkazib berish\n"
-                                  + "⭐️ *4.9 / 5* mijozlar bahosi\n"
-                                  + "🏢 *8 ta filial* O'zbekiston bo'ylab\n"
-                                  + "📅 *2018 yildan* beri bozorda\n"
-                                  + "🤝 *Apple* rasmiy hamkori\n\n"
-                                  + "Sizga xizmat qilishga tayyormiz! 🍎");
+                // ── SHOW_LOCATION step yoqilganda ham ishlaydi —
+                // (bu step handleStep da emas, handleMainMenu da joylashgani uchun alohida tekshiramiz)
+                if ("SHOW_LOCATION".equals(step.get(chatId))) {
+                        // Qaysi filial tanlangan?
+                        for (String[] f : FILIALS) {
+                                if (text.equals(f[0])) {
+                                        try {
+                                                double lat = Double.parseDouble(f[2]);
+                                                double lon = Double.parseDouble(f[3]);
+                                                SendLocation loc = new SendLocation();
+                                                loc.setChatId(chatId.toString());
+                                                loc.setLatitude(lat);
+                                                loc.setLongitude(lon);
+                                                execute(loc);
+                                                send(chatId, "🏢 *" + f[0] + "*\n📍 " + f[1]
+                                                        + "\n🕐 " + (isRu ? "09:00 – 21:00 (Пн–Вс)" : (isEn ? "09:00 – 21:00 (Mon–Sun)" : "09:00 – 21:00 (Du–Ya)"))
+                                                        + "\n📞 +998 (71) 202-02-12");
+                                        } catch (TelegramApiException e) {
+                                                e.printStackTrace();
+                                        }
+                                        return;
+                                }
+                        }
+                        // Tanlangan matn filial emas — menyuga qaytamiz
+                        step.remove(chatId);
+                }
+
+                if (text.equals("📊 Natijalar") || text.equals("📊 Достижения") || text.equals("📊 Achievements")) {
+                        send(chatId,
+                                isRu ? "📊 *НАШИ ДОСТИЖЕНИЯ*\n\n🏆 *500 000+* довольных клиентов\n✅ *100%* оригинальные товары\n🛡 *1 год* официальной гарантии\n🚀 *2–4 часа* доставка по Ташкенту\n⭐️ *4.9 / 5* рейтинг клиентов\n🏢 *8 магазинов* по Узбекистану\n📅 На рынке с *2018 года*\n🤝 Официальный партнёр *Apple*\n\nРады служить вам! 🍎"
+                                        : (isEn ? "📊 *OUR ACHIEVEMENTS*\n\n🏆 *500 000+* happy customers\n✅ *100%* original products\n🛡 *1 year* official warranty\n🚀 *2–4 hours* delivery in Tashkent\n⭐️ *4.9 / 5* customer rating\n🏢 *8 stores* across Uzbekistan\n📅 In market since *2018*\n🤝 Official *Apple* partner\n\nHappy to serve you! 🍎"
+                                           : "📊 *BIZNING NATIJALARIMIZ*\n\n🏆 *500 000+* mamnun mijoz\n✅ *100%* original mahsulotlar\n🛡 *1 yil* rasmiy kafolat\n🚀 *2–4 soat* Toshkentda yetkazib berish\n⭐️ *4.9 / 5* mijozlar bahosi\n🏢 *8 ta filial* O'zbekiston bo'ylab\n📅 *2018 yildan* beri bozorda\n🤝 *Apple* rasmiy hamkori\n\nSizga xizmat qilishga tayyormiz! 🍎"));
                         return;
                 }
 
-                if (text.equals("📝 Fikr-mulohaza") || text.equals("📝 Отзывы")) {
+                if (text.equals("📝 Fikr-mulohaza") || text.equals("📝 Отзывы") || text.equals("📝 Reviews")) {
                         step.put(chatId, "FEEDBACK_PHONE");
                         sendWithKeyboard(chatId,
-                                isRu
-                                        ? "📝 *ОСТАВИТЬ ОТЗЫВ*\n\nВаше мнение очень важно!\n\n📲 Отправьте номер телефона:"
-                                        : "📝 *FIKR-MULOHAZA*\n\nFikringiz biz uchun juda muhim!\n\n📲 Telefon raqamingizni yuboring:",
+                                isRu ? "📝 *ОСТАВИТЬ ОТЗЫВ*\n\nВаше мнение очень важно!\n\n📲 Отправьте номер телефона:"
+                                        : (isEn ? "📝 *LEAVE A REVIEW*\n\nYour opinion matters!\n\n📲 Send your phone number:"
+                                           : "📝 *FIKR-MULOHAZA*\n\nFikringiz biz uchun juda muhim!\n\n📲 Telefon raqamingizni yuboring:"),
                                 getPhoneKeyboard(lang));
                         return;
                 }
 
-                if (text.equals("🌐 Ijtimoiy tarmoqlar") || text.equals("🌐 Соцсети")) {
-                        send(chatId, isRu
-                                ? "🌐 *МЫ В СОЦСЕТЯХ*\n\n"
-                                  + "📸 Instagram: @AppleStoreUz\n"
-                                  + "📢 Telegram: @AppleChannel\n"
-                                  + "💬 Поддержка: @AppleStoreUz\\_Help\n"
-                                  + "🎥 YouTube: Apple Store Uz\n\n"
-                                  + "Подписывайтесь! 🔔"
-                                : "🌐 *IJTIMOIY TARMOQLAR*\n\n"
-                                  + "📸 Instagram: @AppleStoreUz\n"
-                                  + "📢 Telegram: @AppleChannel\n"
-                                  + "💬 Yordam: @AppleStoreUz\\_Help\n"
-                                  + "🎥 YouTube: Apple Store Uz\n\n"
-                                  + "Kuzating! 🔔");
+                // ── 🌐 Ijtimoiy tarmoqlar — Inline buttons bilan ───────────
+                if (text.equals("🌐 Ijtimoiy tarmoqlar") || text.equals("🌐 Соцсети") || text.equals("🌐 Social Media")) {
+                        SendMessage socialMsg = new SendMessage();
+                        socialMsg.setChatId(chatId.toString());
+                        socialMsg.setParseMode("Markdown");
+                        socialMsg.setText(
+                                isRu ? "🌐 *МЫ В СОЦИАЛЬНЫХ СЕТЯХ*\n\n"
+                                       + "Подписывайтесь и будьте в курсе акций,\n"
+                                       + "новинок и специальных предложений! 🔔"
+                                        : (isEn ? "🌐 *FOLLOW US ON SOCIAL MEDIA*\n\n"
+                                                  + "Subscribe and stay updated on promotions,\n"
+                                                  + "new arrivals and special offers! 🔔"
+                                           : "🌐 *BIZNI KUZATING*\n\n"
+                                             + "Aksiyalar, yangi mahsulotlar va maxsus\n"
+                                             + "takliflardan xabardor bo'ling! 🔔"));
+                        InlineKeyboardMarkup socialMk = new InlineKeyboardMarkup();
+                        socialMk.setKeyboard(List.of(
+                                List.of(
+                                        createInlineLinkBtn("📸 Instagram", "https://instagram.com/AppleStoreUz"),
+                                        createInlineLinkBtn("📢 Telegram", "https://t.me/AppleChannel")
+                                ),
+                                List.of(
+                                        createInlineLinkBtn("🎥 YouTube", "https://youtube.com/@AppleStoreUz"),
+                                        createInlineLinkBtn("🌐 Facebook", "https://facebook.com/AppleStoreUz")
+                                ),
+                                List.of(
+                                        createInlineLinkBtn("💬 " + (isRu ? "Поддержка" : (isEn ? "Support" : "Yordam")), "https://t.me/AppleStoreUz_Help")
+                                )
+                        ));
+                        socialMsg.setReplyMarkup(socialMk);
+                        executeSafe(socialMsg);
                         return;
                 }
 
-                if (text.equals("🌍 Til") || text.equals("🌍 Язык")) {
+                // ── ℹ️ Biz haqimizda ────────────────────────────────────────
+                if (text.equals("ℹ️ Biz haqimizda") || text.equals("ℹ️ О нас") || text.equals("ℹ️ About Us")) {
+                        send(chatId,
+                                isRu ? "ℹ️ *О НАС — APPLE STORE UZ*\n\n"
+                                       + "🍎 Мы — официальный авторизованный\n"
+                                       + "партнёр *Apple* в Узбекистане.\n\n"
+                                       + "📅 *Работаем с 2018 года*\n"
+                                       + "🏢 *8 магазинов* по всей стране\n"
+                                       + "👥 *Команда:* 120+ специалистов\n"
+                                       + "🏆 *500 000+* счастливых клиентов\n\n"
+                                       + "━━━━━━━━━━━━━━━━━━━\n"
+                                       + "✅ *Что мы гарантируем:*\n"
+                                       + "• 100% оригинальные товары Apple\n"
+                                       + "• 1 год официальной гарантии\n"
+                                       + "• Бесплатный сервис и настройка\n"
+                                       + "• Обмен и возврат в течение 14 дней\n"
+                                       + "• Рассрочка 0% на 12 месяцев\n\n"
+                                       + "━━━━━━━━━━━━━━━━━━━\n"
+                                       + "🏅 *Награды и сертификаты:*\n"
+                                       + "🥇 Apple Premium Reseller 2023\n"
+                                       + "🥇 Best Service Award — O'zbekiston\n"
+                                       + "🥇 Top 10 Tech Store — 2024\n\n"
+                                       + "📞 +998 (71) 202-02-12\n"
+                                       + "📧 info@applestoreuz.com"
+                                        : (isEn ? "ℹ️ *ABOUT US — APPLE STORE UZ*\n\n"
+                                                  + "🍎 We are an official authorized\n"
+                                                  + "*Apple* partner in Uzbekistan.\n\n"
+                                                  + "📅 *Operating since 2018*\n"
+                                                  + "🏢 *8 stores* across the country\n"
+                                                  + "👥 *Team:* 120+ specialists\n"
+                                                  + "🏆 *500 000+* happy customers\n\n"
+                                                  + "━━━━━━━━━━━━━━━━━━━\n"
+                                                  + "✅ *What we guarantee:*\n"
+                                                  + "• 100% original Apple products\n"
+                                                  + "• 1 year official warranty\n"
+                                                  + "• Free setup and support\n"
+                                                  + "• Exchange and return within 14 days\n"
+                                                  + "• 0% installment for 12 months\n\n"
+                                                  + "━━━━━━━━━━━━━━━━━━━\n"
+                                                  + "🏅 *Awards & Certificates:*\n"
+                                                  + "🥇 Apple Premium Reseller 2023\n"
+                                                  + "🥇 Best Service Award — Uzbekistan\n"
+                                                  + "🥇 Top 10 Tech Store — 2024\n\n"
+                                                  + "📞 +998 (71) 202-02-12\n"
+                                                  + "📧 info@applestoreuz.com"
+                                           : "ℹ️ *BIZ HAQIMIZDA — APPLE STORE UZ*\n\n"
+                                             + "🍎 Biz O'zbekistondagi *Apple* ning\n"
+                                             + "rasmiy vakolatli hamkorimiz.\n\n"
+                                             + "📅 *2018 yildan ishlaymiz*\n"
+                                             + "🏢 *8 ta do'kon* butun mamlakatda\n"
+                                             + "👥 *Jamoa:* 120+ mutaxassis\n"
+                                             + "🏆 *500 000+* mamnun mijoz\n\n"
+                                             + "━━━━━━━━━━━━━━━━━━━\n"
+                                             + "✅ *Kafolat beramiz:*\n"
+                                             + "• 100% original Apple mahsulotlari\n"
+                                             + "• 1 yil rasmiy kafolat\n"
+                                             + "• Bepul sozlash va texnik yordam\n"
+                                             + "• 14 kun ichida almashtirish/qaytarish\n"
+                                             + "• 0% bo'lib to'lash 12 oygacha\n\n"
+                                             + "━━━━━━━━━━━━━━━━━━━\n"
+                                             + "🏅 *Mukofotlar va sertifikatlar:*\n"
+                                             + "🥇 Apple Premium Reseller 2023\n"
+                                             + "🥇 Best Service Award — O'zbekiston\n"
+                                             + "🥇 Top 10 Tech Store — 2024\n\n"
+                                             + "📞 +998 (71) 202-02-12\n"
+                                             + "📧 info@applestoreuz.com"));
+                        return;
+                }
+
+                if (text.equals("🌍 Til") || text.equals("🌍 Язык") || text.equals("🌍 Language")) {
                         sendStart(chatId);
                         return;
                 }
 
                 if (!text.startsWith("/")) {
                         sendWithKeyboard(chatId,
-                                isRu ? "Используйте кнопки меню 👇" : "Menyu tugmalaridan foydalaning 👇",
+                                isRu ? "Используйте кнопки меню 👇"
+                                        : (isEn ? "Please use the menu buttons 👇" : "Menyu tugmalaridan foydalaning 👇"),
                                 getMainMenu(lang));
                 }
         }
@@ -1306,7 +1474,6 @@ public class Mybot extends TelegramLongPollingBot {
                 String name  = productNames.getOrDefault(id, "Mahsulot");
                 String price = productPrices.getOrDefault(id, "—");
                 String lang  = userLang.getOrDefault(chatId, "uz");
-                boolean isRu = lang.equals("ru");
 
                 String[] product = getProduct(id);
                 String desc = (product != null) ? product[4] : "";
@@ -1317,37 +1484,39 @@ public class Mybot extends TelegramLongPollingBot {
                                 + "🆔 Chat ID: `" + chatId + "`\n"
                                 + "👍 " + like + "   |   👎 " + dislike);
 
-                String newCaption =
-                        "🍎 *APPLE STORE*\n\n"
-                                + "✨ *" + name + "*\n\n"
-                                + desc + "\n\n"
-                                + "━━━━━━━━━━━━━━━━━━━\n"
-                                + (isRu ? "💰 Цена: *" : "💰 Narxi: *") + price + "*\n"
-                                + (isRu ? "🛡 Гарантия: *1 год*\n" : "🛡 Kafolat: *1 yil*\n")
-                                + (isRu ? "🚚 Доставка: *Бесплатно*\n" : "🚚 Yetkazib berish: *Bepul*\n")
-                                + "━━━━━━━━━━━━━━━━━━━\n\n"
-                                + "👍 " + like + "   |   👎 " + dislike;
-
-                if (newCaption.length() > 1024) {
-                        newCaption = newCaption.substring(0, 1020) + "...";
-                }
+                String newCaption = buildCaption(product != null ? product : new String[]{id, name, price, "", desc}, lang, like, dislike);
+                if (newCaption.length() > 1024) newCaption = newCaption.substring(0, 1020) + "...";
 
                 EditMessageCaption edit = new EditMessageCaption();
                 edit.setChatId(chatId.toString());
                 edit.setMessageId(update.getCallbackQuery().getMessage().getMessageId());
                 edit.setParseMode("Markdown");
                 edit.setCaption(newCaption);
-
-                InlineKeyboardMarkup mk = new InlineKeyboardMarkup();
-                mk.setKeyboard(List.of(
-                        List.of(
-                                createInlineBtn("👍 " + like,    "like_"    + id),
-                                createInlineBtn("👎 " + dislike, "dislike_" + id)
-                        ),
-                        List.of(createInlineBtn(isRu ? "🛒 Купить" : "🛒 Sotib olish", "buy_" + id))
-                ));
-                edit.setReplyMarkup(mk);
+                edit.setReplyMarkup(buildRatingKeyboard(id, lang, like, dislike));
                 executeSafe(edit);
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  CAPTION BUILDER (umumiy metod)
+        // ════════════════════════════════════════════════════════════════
+        private String buildCaption(String[] p, String lang, int like, int dislike) {
+                boolean isRu = lang.equals("ru");
+                boolean isEn = lang.equals("en");
+                String id    = p[0];
+                String name  = p[1];
+                String price = p[2];
+                String desc  = p[4];
+                return "🍎 *APPLE STORE*\n\n"
+                        + "✨ *" + name + "*\n\n"
+                        + desc + "\n\n"
+                        + "━━━━━━━━━━━━━━━━━━━\n"
+                        + (isRu ? "💰 Цена: *" : (isEn ? "💰 Price: *" : "💰 Narxi: *")) + price + "*\n"
+                        + (isRu ? "🛡 Гарантия: *1 год*\n" : (isEn ? "🛡 Warranty: *1 year*\n" : "🛡 Kafolat: *1 yil*\n"))
+                        + (isRu ? "🚚 Доставка: *Бесплатно*\n" : (isEn ? "🚚 Delivery: *Free*\n" : "🚚 Yetkazib berish: *Bepul*\n"))
+                        + "⭐ " + getRatingStars(id) + "\n"
+                        + "━━━━━━━━━━━━━━━━━━━\n\n"
+                        + "👍 " + like + "   |   👎 " + dislike + "\n\n"
+                        + (isRu ? "🌟 Оцените товар:" : (isEn ? "🌟 Rate this product:" : "🌟 Mahsulotga baho bering:"));
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -1356,46 +1525,19 @@ public class Mybot extends TelegramLongPollingBot {
         private void sendProduct(Long chatId, String[] p) {
                 if (p == null) return;
                 String id     = p[0];
-                String name   = p[1];
-                String price  = p[2];
-                String imgUrl = p[3];
-                String desc   = p[4];
                 String lang   = userLang.getOrDefault(chatId, "uz");
-                boolean isRu  = lang.equals("ru");
-
                 int like    = likes.getOrDefault(id, 0);
                 int dislike = dislikes.getOrDefault(id, 0);
 
-                String caption =
-                        "🍎 *APPLE STORE*\n\n"
-                                + "✨ *" + name + "*\n\n"
-                                + desc + "\n\n"
-                                + "━━━━━━━━━━━━━━━━━━━\n"
-                                + (isRu ? "💰 Цена: *" : "💰 Narxi: *") + price + "*\n"
-                                + (isRu ? "🛡 Гарантия: *1 год*\n" : "🛡 Kafolat: *1 yil*\n")
-                                + (isRu ? "🚚 Доставка: *Бесплатно*\n" : "🚚 Yetkazib berish: *Bepul*\n")
-                                + "━━━━━━━━━━━━━━━━━━━\n\n"
-                                + "👍 " + like + "   |   👎 " + dislike;
-
-                if (caption.length() > 1024) {
-                        caption = caption.substring(0, 1020) + "...";
-                }
-
-                InlineKeyboardMarkup mk = new InlineKeyboardMarkup();
-                mk.setKeyboard(List.of(
-                        List.of(
-                                createInlineBtn("👍 " + like,    "like_"    + id),
-                                createInlineBtn("👎 " + dislike, "dislike_" + id)
-                        ),
-                        List.of(createInlineBtn(isRu ? "🛒 Купить" : "🛒 Sotib olish", "buy_" + id))
-                ));
+                String caption = buildCaption(p, lang, like, dislike);
+                if (caption.length() > 1024) caption = caption.substring(0, 1020) + "...";
 
                 SendPhoto photo = new SendPhoto();
                 photo.setChatId(chatId.toString());
                 photo.setParseMode("Markdown");
                 photo.setCaption(caption);
-                photo.setReplyMarkup(mk);
-                photo.setPhoto(new InputFile(imgUrl));
+                photo.setReplyMarkup(buildRatingKeyboard(id, lang, like, dislike));
+                photo.setPhoto(new InputFile(p[3]));
 
                 try {
                         execute(photo);
@@ -1438,13 +1580,14 @@ public class Mybot extends TelegramLongPollingBot {
                 m.setParseMode("Markdown");
                 m.setText(
                         "🍎 *Apple Store Bot*\n\n"
-                                + "Salom! / Привет!\n\n"
-                                + "_Tilni tanlang / Выберите язык:_"
+                                + "Salom! / Привет! / Hello!\n\n"
+                                + "_Tilni tanlang / Выберите язык / Choose language:_"
                 );
                 InlineKeyboardMarkup mk = new InlineKeyboardMarkup();
                 mk.setKeyboard(List.of(List.of(
                         createInlineBtn("🇺🇿 O'zbekcha", "uz"),
-                        createInlineBtn("🇷🇺 Русский",   "ru")
+                        createInlineBtn("🇷🇺 Русский",   "ru"),
+                        createInlineBtn("🇬🇧 English",   "en")
                 )));
                 m.setReplyMarkup(mk);
                 executeSafe(m);
@@ -1457,6 +1600,13 @@ public class Mybot extends TelegramLongPollingBot {
                                 + "✅ 100% Оригинал\n🛡 1 год гарантии\n"
                                 + "🚚 Бесплатная доставка по Ташкенту\n\n"
                                 + "Выберите раздел 👇";
+                }
+                if (lang.equals("en")) {
+                        return "🍎 *APPLE STORE UZ*\n\n"
+                                + "Welcome! Best Apple products.\n\n"
+                                + "✅ 100% Original\n🛡 1 year warranty\n"
+                                + "🚚 Free delivery in Tashkent\n\n"
+                                + "Choose a section 👇";
                 }
                 return "🍎 *APPLE STORE UZ*\n\n"
                         + "Xush kelibsiz! Eng yaxshi Apple mahsulotlari.\n\n"
@@ -1478,7 +1628,16 @@ public class Mybot extends TelegramLongPollingBot {
                                 row("💳 Оплата", "🚚 Доставка"),
                                 row("☎️ Связаться", "📍 Адреса"),
                                 row("📝 Отзывы", "🌐 Соцсети"),
-                                row("🌍 Язык")
+                                row("ℹ️ О нас", "🌍 Язык")
+                        ));
+                } else if (lang.equals("en")) {
+                        kb.setKeyboard(List.of(
+                                row("🛒 Apple Store"),
+                                row("💰 Prices", "📊 Achievements"),
+                                row("💳 Payment", "🚚 Delivery"),
+                                row("☎️ Contact", "📍 Addresses"),
+                                row("📝 Reviews", "🌐 Social Media"),
+                                row("ℹ️ About Us", "🌍 Language")
                         ));
                 } else {
                         kb.setKeyboard(List.of(
@@ -1487,7 +1646,7 @@ public class Mybot extends TelegramLongPollingBot {
                                 row("💳 To'lov", "🚚 Yetkazib berish"),
                                 row("☎️ Bog'lanish", "📍 Manzillar"),
                                 row("📝 Fikr-mulohaza", "🌐 Ijtimoiy tarmoqlar"),
-                                row("🌍 Til")
+                                row("ℹ️ Biz haqimizda", "🌍 Til")
                         ));
                 }
                 return kb;
@@ -1496,105 +1655,128 @@ public class Mybot extends TelegramLongPollingBot {
         private ReplyKeyboardMarkup getAppleMenu(String lang) {
                 ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
                 kb.setResizeKeyboard(true);
+                String back = lang.equals("ru") ? "🔙 Назад" : (lang.equals("en") ? "🔙 Back" : "🔙 Orqaga");
                 kb.setKeyboard(List.of(
                         row("📱 iPhone", "💻 MacBook"),
                         row("⌚️ Apple Watch", "🎧 AirPods"),
                         row("📱 iPad", "🔊 HomePod"),
                         row("🥽 Vision Pro", "🖥 Mac mini"),
-                        row(lang.equals("ru") ? "🔙 Назад" : "🔙 Orqaga")
+                        row(back)
                 ));
                 return kb;
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  🆕 iPhone menyu — iPhone 17 Pro Max qo'shildi
-        // ════════════════════════════════════════════════════════════════
         private ReplyKeyboardMarkup getIphoneMenu(String lang) {
+                String back = lang.equals("ru") ? "🔙 Назад" : (lang.equals("en") ? "🔙 Back" : "🔙 Orqaga");
                 ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
                 kb.setResizeKeyboard(true);
                 kb.setKeyboard(List.of(
                         row("📱 iPhone 14", "📱 iPhone 15"),
                         row("📱 iPhone 15 Pro Max", "📱 iPhone 16"),
                         row("📱 iPhone 17 Pro Max"),
-                        row(lang.equals("ru") ? "🔙 Назад" : "🔙 Orqaga")
+                        row(back)
                 ));
                 return kb;
         }
 
         private ReplyKeyboardMarkup getMacbookMenu(String lang) {
+                String back = lang.equals("ru") ? "🔙 Назад" : (lang.equals("en") ? "🔙 Back" : "🔙 Orqaga");
                 ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
                 kb.setResizeKeyboard(true);
                 kb.setKeyboard(List.of(
                         row("💻 MacBook Air M2", "💻 MacBook Air M3"),
                         row("💻 MacBook Pro M3 14\"", "💻 MacBook Pro M3 16\""),
-                        row(lang.equals("ru") ? "🔙 Назад" : "🔙 Orqaga")
+                        row(back)
                 ));
                 return kb;
         }
 
         private ReplyKeyboardMarkup getWatchMenu(String lang) {
+                String back = lang.equals("ru") ? "🔙 Назад" : (lang.equals("en") ? "🔙 Back" : "🔙 Orqaga");
                 ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
                 kb.setResizeKeyboard(true);
                 kb.setKeyboard(List.of(
                         row("⌚️ Watch SE 2", "⌚️ Watch Series 8"),
                         row("⌚️ Watch Series 9", "⌚️ Watch Ultra 2"),
-                        row(lang.equals("ru") ? "🔙 Назад" : "🔙 Orqaga")
+                        row(back)
                 ));
                 return kb;
         }
 
         private ReplyKeyboardMarkup getAirpodsMenu(String lang) {
+                String back = lang.equals("ru") ? "🔙 Назад" : (lang.equals("en") ? "🔙 Back" : "🔙 Orqaga");
                 ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
                 kb.setResizeKeyboard(true);
                 kb.setKeyboard(List.of(
                         row("🎧 AirPods 3", "🎧 AirPods Pro 2"),
                         row("🎧 AirPods Max", "🎧 AirPods Pro 2 USB-C"),
-                        row(lang.equals("ru") ? "🔙 Назад" : "🔙 Orqaga")
+                        row(back)
                 ));
                 return kb;
         }
 
         private ReplyKeyboardMarkup getIpadMenu(String lang) {
+                String back = lang.equals("ru") ? "🔙 Назад" : (lang.equals("en") ? "🔙 Back" : "🔙 Orqaga");
                 ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
                 kb.setResizeKeyboard(true);
                 kb.setKeyboard(List.of(
                         row("📱 iPad mini 6", "📱 iPad Air M1"),
                         row("📱 iPad Pro M2", "📱 iPad Pro M4"),
-                        row(lang.equals("ru") ? "🔙 Назад" : "🔙 Orqaga")
+                        row(back)
                 ));
                 return kb;
         }
 
         private ReplyKeyboardMarkup getHomepodMenu(String lang) {
+                String back = lang.equals("ru") ? "🔙 Назад" : (lang.equals("en") ? "🔙 Back" : "🔙 Orqaga");
                 ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
                 kb.setResizeKeyboard(true);
                 kb.setKeyboard(List.of(
                         row("🔊 HomePod mini", "🔊 HomePod 2"),
                         row("🔊 HomePod mini Orange", "🔊 HomePod mini Blue"),
-                        row(lang.equals("ru") ? "🔙 Назад" : "🔙 Orqaga")
+                        row(back)
                 ));
                 return kb;
         }
 
         private ReplyKeyboardMarkup getVisionMenu(String lang) {
+                String back = lang.equals("ru") ? "🔙 Назад" : (lang.equals("en") ? "🔙 Back" : "🔙 Orqaga");
                 ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
                 kb.setResizeKeyboard(true);
                 kb.setKeyboard(List.of(
                         row("🥽 Vision Pro 256GB", "🥽 Vision Pro 512GB"),
                         row("🥽 Vision Pro 1TB", "🥽 Vision Pro Dev Kit"),
-                        row(lang.equals("ru") ? "🔙 Назад" : "🔙 Orqaga")
+                        row(back)
                 ));
                 return kb;
         }
 
         private ReplyKeyboardMarkup getMacMenu(String lang) {
+                String back = lang.equals("ru") ? "🔙 Назад" : (lang.equals("en") ? "🔙 Back" : "🔙 Orqaga");
                 ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
                 kb.setResizeKeyboard(true);
                 kb.setKeyboard(List.of(
                         row("🖥 Mac mini M2", "🖥 Mac mini M2 Pro"),
                         row("🖥 Mac Studio M2", "🖥 Mac Pro Tower"),
-                        row(lang.equals("ru") ? "🔙 Назад" : "🔙 Orqaga")
+                        row(back)
                 ));
+                return kb;
+        }
+
+        // ── Filial location tanlash klaviaturasi ─────────────────────
+        private ReplyKeyboardMarkup getFilialLocationKeyboard(String lang) {
+                String back = lang.equals("ru") ? "🔙 Назад" : (lang.equals("en") ? "🔙 Back" : "🔙 Orqaga");
+                ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
+                kb.setResizeKeyboard(true);
+                List<KeyboardRow> rows = new ArrayList<>();
+                for (int i = 0; i < FILIALS.length; i += 2) {
+                        if (i + 1 < FILIALS.length)
+                                rows.add(row(FILIALS[i][0], FILIALS[i + 1][0]));
+                        else
+                                rows.add(row(FILIALS[i][0]));
+                }
+                rows.add(row(back));
+                kb.setKeyboard(rows);
                 return kb;
         }
 
@@ -1603,8 +1785,8 @@ public class Mybot extends TelegramLongPollingBot {
                 kb.setResizeKeyboard(true);
                 List<KeyboardRow> rows = new ArrayList<>();
                 for (int i = 0; i < FILIALS.length; i += 2) {
-                        if (i + 1 < FILIALS.length) rows.add(row(FILIALS[i], FILIALS[i + 1]));
-                        else rows.add(row(FILIALS[i]));
+                        if (i + 1 < FILIALS.length) rows.add(row(FILIALS[i][0], FILIALS[i + 1][0]));
+                        else rows.add(row(FILIALS[i][0]));
                 }
                 rows.add(row("⬅️ Qaytish"));
                 kb.setKeyboard(rows);
@@ -1615,11 +1797,12 @@ public class Mybot extends TelegramLongPollingBot {
                 ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
                 kb.setResizeKeyboard(true);
                 KeyboardButton btn = new KeyboardButton(
-                        lang.equals("ru") ? "📲 Отправить номер" : "📲 Raqamni yuborish");
+                        lang.equals("ru") ? "📲 Отправить номер"
+                                : (lang.equals("en") ? "📲 Send number" : "📲 Raqamni yuborish"));
                 btn.setRequestContact(true);
                 kb.setKeyboard(List.of(
                         new KeyboardRow(List.of(btn)),
-                        row(lang.equals("ru") ? "❌ Отмена" : "❌ Bekor qilish")
+                        row(lang.equals("ru") ? "❌ Отмена" : (lang.equals("en") ? "❌ Cancel" : "❌ Bekor qilish"))
                 ));
                 return kb;
         }
@@ -1627,7 +1810,7 @@ public class Mybot extends TelegramLongPollingBot {
         private ReplyKeyboardMarkup getBackKeyboard(String lang) {
                 ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
                 kb.setResizeKeyboard(true);
-                kb.setKeyboard(List.of(row(lang.equals("ru") ? "🔙 Назад" : "⬅️ Qaytish")));
+                kb.setKeyboard(List.of(row(lang.equals("ru") ? "🔙 Назад" : (lang.equals("en") ? "🔙 Back" : "⬅️ Qaytish"))));
                 return kb;
         }
 
@@ -1674,6 +1857,14 @@ public class Mybot extends TelegramLongPollingBot {
                 InlineKeyboardButton b = new InlineKeyboardButton();
                 b.setText(text);
                 b.setCallbackData(data);
+                return b;
+        }
+
+        // ── URL bilan inline button ──────────────────────────────────────
+        private InlineKeyboardButton createInlineLinkBtn(String text, String url) {
+                InlineKeyboardButton b = new InlineKeyboardButton();
+                b.setText(text);
+                b.setUrl(url);
                 return b;
         }
 
