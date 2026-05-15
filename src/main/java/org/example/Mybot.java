@@ -734,7 +734,7 @@ public class Mybot extends TelegramLongPollingBot {
                                                 + "👤 Владелец: *Alisherov Ismoil*\n"
                                                 + "🏦 Банк: *Uzcard*\n\n"
                                                 + "📌 После оплаты отправьте скриншот:\n"
-                                                + "📞 @AppleStoreUz\\_Help");
+                                                + "📞 @IMSD1707\\_Help");
                         } else {
                                 send(chatId,
                                         "💳 *TO'LOV REKVIZITLARI*\n\n"
@@ -742,7 +742,7 @@ public class Mybot extends TelegramLongPollingBot {
                                                 + "👤 Egasi: *Alisherov Ismoil*\n"
                                                 + "🏦 Bank: *Uzcard*\n\n"
                                                 + "📌 To'lovdan keyin skrinshot yuboring:\n"
-                                                + "📞 @AppleStoreUz\\_Help");
+                                                + "📞 @IMSD1707\\_Help");
                         }
                 }
         }
